@@ -386,7 +386,7 @@ mainLoop state@(Model top player computer _) = do
 
 main :: IO ()
 main = do
-  initWindow width height "raylib example - basic window"
+  initWindow width height "Uno"
   setTargetFPS 60
 
   genInitialState >>= whileWindowOpen_ mainLoop
