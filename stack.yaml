@@ -42,8 +42,7 @@ packages:
 #
 extra-deps:
   - random-shuffle-0.0.4
-  - git: https://github.com/Arden144/h-raylib.git
-    commit: 7921b8427c66cc153618c0e2e69cb8fd4fe3f1dd
+  - h-raylib-4.5.3.1
 # Override default flag values for local packages and extra-deps
 # flags: {}
 
