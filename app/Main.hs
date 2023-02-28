@@ -18,6 +18,7 @@ import System.Random.Shuffle (shuffle')
 
 data Color = Red | Yellow | Green | Blue deriving (Enum, Eq, Ord)
 
+-- Convert a Color to a Raylib color
 getRlColor :: Main.Color -> Raylib.Types.Color
 getRlColor Red = red
 getRlColor Yellow = yellow
@@ -73,12 +74,14 @@ playerCardY = fromIntegral height - 50 - cardHeight
 pileCard :: Rectangle
 pileCard = Rectangle (fromIntegral width / 2 - cardWidth / 2) (fromIntegral height / 2 - cardHeight / 2) cardWidth cardHeight
 
+-- Draws the background of an uno card
 drawCardBackground :: Float -> Float -> Raylib.Types.Color -> IO ()
 drawCardBackground x y c =
   do
     drawRectangleRounded (Rectangle x y cardWidth cardHeight) 0.2 0 white
     drawRectangleRounded (Rectangle (x + cardBorder) (y + cardBorder) (cardWidth - 2 * cardBorder) (cardHeight - 2 * cardBorder)) 0.2 0 c
 
+-- Draws the background of an uno wildcard
 drawWildcardBackground :: Float -> Float -> IO ()
 drawWildcardBackground x y =
   do
@@ -122,6 +125,7 @@ instance Draw Card where
       drawCardBackground x y (getRlColor c)
       drawText "+4" (round (x + 4 * cardBorder)) (round (y + 4 * cardBorder)) 36 black
 
+-- Draws the back of a card
 drawBlankCard :: Float -> Float -> IO ()
 drawBlankCard x y = drawCardBackground x y black
 
@@ -132,19 +136,23 @@ data Model = Model Card Deck Deck Deck
 class Draw a where
   draw :: (a, Float, Float) -> IO ()
 
+-- Creates all of the preset cards in a deck
 allCards :: Deck
 allCards =
   ((\c -> Normal c Zero : concat (replicate 2 ([Skip c, Reverse c, Draw c] ++ (Normal c <$> enumFrom One)))) =<< enumFrom Red)
     ++ replicate 4 (Wild Nothing)
     ++ replicate 4 (WildDraw Nothing)
 
+-- Deals 7 cards
 deal :: Deck -> (Deck, Deck)
 deal = splitAt 7
 
+-- Checks if a card is a valid starter card for the pile
 isStarterCard :: Card -> Bool
 isStarterCard (Normal _ _) = True
 isStarterCard _ = False
 
+-- Creates the initial state by shuffling the cards and drawing for the players
 genInitialState :: IO Model
 genInitialState =
   do
@@ -157,6 +165,7 @@ genInitialState =
 
     return (Model top player computer pile4)
 
+-- Checks if a card in the player's deck was clicked and issues an update
 deckCardUpdate :: Vector2 -> [(Card, Float, Float)] -> Update
 deckCardUpdate mouse cards = fromMaybe None (firstJust f cards)
   where
@@ -178,6 +187,7 @@ deckCardUpdate mouse cards = fromMaybe None (firstJust f cards)
       let rect = Rectangle x y cardSpacing cardHeight
        in toMaybe (checkCollisionPointRec mouse rect) (Play card)
 
+-- Checks if the pile was clicked and issues an update
 pileCardUpdate :: Vector2 -> Update
 pileCardUpdate mouse = toUpdate (checkCollisionPointRec mouse pileCard) Pickup
 
@@ -189,6 +199,7 @@ toUpdate :: Bool -> Update -> Update
 toUpdate False _ = None
 toUpdate True a = a
 
+-- Gets the color of a card
 getColor :: Card -> Maybe Color
 getColor (Normal c _) = Just c
 getColor (Skip c) = Just c
@@ -197,21 +208,23 @@ getColor (Draw c) = Just c
 getColor (Wild c) = c
 getColor (WildDraw c) = c
 
+-- Gets the number of a card
 getNumber :: Card -> Maybe Number
 getNumber (Normal _ n) = Just n
 getNumber _ = Nothing
 
+-- Counts the total of each color of card in the deck
 countColors :: Deck -> Map.Map Color Int
 countColors [] = Map.empty
 countColors (card : cards) = case getColor card of
   Just color -> snd $ Map.insertLookupWithKey (\_ a b -> a + b) color 1 (countColors cards)
   Nothing -> countColors cards
 
+-- Finds all valid moves in a deck given the top card
 allMoves :: Card -> Deck -> Deck
 allMoves top = filter (isValidMove top)
 
--- given a list of available moves and the priority of colors, pick the best move or return Nothing
-
+-- Finds the best move with a card of the given color
 colorMove :: Deck -> Color -> Maybe Card
 colorMove [] _ = Nothing
 colorMove ((Wild _) : xs) c = colorMove xs c
@@ -220,9 +233,12 @@ colorMove (x : xs) c
   | all (== c) (getColor x) = Just x
   | otherwise = colorMove xs c
 
+-- Finds the best move given a descending list of colors ordered by count
 priorityMove :: Deck -> [Color] -> Maybe Card
 priorityMove moves = firstJust (colorMove moves)
 
+-- Finds a wildcard to be played and sets the color to the ideal color
+-- given a descending list of colors ordered by count
 wildMove :: Deck -> [Color] -> Maybe Card
 wildMove [] _ = Nothing
 wildMove ((Wild _) : _) colors = Just (Wild (Just (head colors)))
@@ -235,14 +251,29 @@ wildMove (_ : xs) colors = wildMove xs colors
 2. If no such move exists, try each color in order of how many cards we have of that color.
 3. If there's still no valid move, play a +4 and change the color to the one we have the most of.
 4. If we don't have a +4, play a wildcard and change the color to the one we have the most of.
-
+5. Pick up a card if no move is possible
 -}
 
--- computerPlayCard :: Model -> Card -> Model
--- computerPlayCard (Model top player computer pile) card =
---   let (Model newTop newComputer newPlayer newPile) = playCard (Model top computer player pile) card
---    in Model newTop newPlayer newComputer newPile
+-- Draws a card for the computer and updates the state
+computerDrawCard :: Model -> Model
+computerDrawCard (Model top player computer (pickup : pile)) = Model top player (pickup : computer) pile
+computerDrawCard (Model top player computer []) = Model top player computer []
 
+-- Gets the computer's next move if possible
+computerGetMove :: Card -> Deck -> Maybe Card
+computerGetMove top deck = listToMaybe $ catMaybes [priorityMove moves idealColor, wildMove moves idealColor]
+  where
+    moves = allMoves top deck
+    idealColor = map fst $ sortBy (\(_, a) (_, b) -> compare b a) (Map.toList (countColors deck))
+
+-- Either plays the best move or picks up if no valid move exists
+computerPlay :: Model -> Model
+computerPlay state@(Model top _ computer _) = case computerGetMove top computer of
+  Just card -> computerPlayCard state card
+  Nothing -> computerDrawCard state
+
+-- Plays a card and plays another turn if needed
+-- Precondition: Card must be playable
 computerPlayCard :: Model -> Card -> Model
 computerPlayCard (Model _ player computer pile) card@(Normal _ _) =
   Model card player (delete card computer) pile
@@ -266,21 +297,7 @@ computerPlayCard _ (Wild Nothing) =
 computerPlayCard _ (WildDraw Nothing) =
   error "computer played wilddraw with no color"
 
-computerDrawCard :: Model -> Model
-computerDrawCard (Model top player computer (pickup : pile)) = Model top player (pickup : computer) pile
-computerDrawCard (Model top player computer []) = Model top player computer []
-
-computerGetMove :: Card -> Deck -> Maybe Card
-computerGetMove top deck = listToMaybe $ catMaybes [priorityMove moves idealColor, wildMove moves idealColor]
-  where
-    moves = allMoves top deck
-    idealColor = map fst $ sortBy (\(_, a) (_, b) -> compare b a) (Map.toList (countColors deck))
-
-computerPlay :: Model -> Model
-computerPlay state@(Model top _ computer _) = case computerGetMove top computer of
-  Just card -> computerPlayCard state card
-  Nothing -> computerDrawCard state
-
+-- Plays a card and runs the computer's move if needed
 -- Precondition: Card must be playable
 playCard :: Model -> Card -> Model
 playCard (Model _ player computer pile) card@(Normal _ _) =
@@ -305,6 +322,7 @@ playCard _ (Wild Nothing) =
 playCard _ (WildDraw Nothing) =
   error "player played wilddraw with no color"
 
+-- Runs an update and updates the model
 update :: Model -> Update -> Either Failure Model
 update state None = Right state
 update state@(Model top _ _ _) (Play card)
@@ -313,6 +331,7 @@ update state@(Model top _ _ _) (Play card)
 update (Model top player computer (pickup : pile)) Pickup = Right (computerPlay (Model top (pickup : player) computer pile))
 update (Model top player computer []) Pickup = Right (Model top player computer [])
 
+-- Returns true if the second card can be played on the first
 isValidMove :: Card -> Card -> Bool
 isValidMove _ (Wild _) = True
 isValidMove _ (WildDraw _) = True
@@ -328,18 +347,22 @@ isValidMove a b = matchingColor || matchingNumber
       (Just c1, Just c2) -> c1 == c2
       _ -> False
 
+-- Run every update until a failure is encountered or all finish
 runUpdates :: Model -> [Update] -> Either Failure Model
 runUpdates state [] = Right state
 runUpdates state (x : xs) = case update state x of
   Left failure -> Left failure
   Right next -> runUpdates next xs
 
+-- Width of the window
 width :: Int
 width = 800
 
+-- Height of the window
 height :: Int
 height = 600
 
+-- Draws all graphics, checks for mouse updates, and updates the state
 mainLoop :: Model -> IO Model
 mainLoop state@(Model _ [] _ _) = do
   beginDrawing
@@ -384,6 +407,7 @@ mainLoop state@(Model top player computer _) = do
     Left _ -> return state
     Right newState -> return newState
 
+-- Opens the window and runs the main loop
 main :: IO ()
 main = do
   initWindow width height "Uno"
