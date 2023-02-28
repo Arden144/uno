@@ -108,7 +108,7 @@ instance Draw Card where
   draw (Wild Nothing, x, y) =
     do
       drawWildcardBackground x y
-      drawText "wild" (round (x + 4 * cardBorder)) (round (y + 4 * cardBorder)) 36 white
+      drawText "wild" (round (x + 4 * cardBorder)) (round (y + 4 * cardBorder)) 36 black
   draw (Wild (Just c), x, y) =
     do
       drawCardBackground x y (getRlColor c)
@@ -116,7 +116,7 @@ instance Draw Card where
   draw (WildDraw Nothing, x, y) =
     do
       drawWildcardBackground x y
-      drawText "+4" (round (x + 4 * cardBorder)) (round (y + 4 * cardBorder)) 36 white
+      drawText "+4" (round (x + 4 * cardBorder)) (round (y + 4 * cardBorder)) 36 black
   draw (WildDraw (Just c), x, y) =
     do
       drawCardBackground x y (getRlColor c)
