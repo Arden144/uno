@@ -56,6 +56,13 @@ data Update
 data Failure
   = InvalidMove
 
+type Deck = [Card]
+
+data Model = Model Card Deck Deck Deck
+
+class Draw a where
+  draw :: (a, Float, Float) -> IO ()
+
 cardWidth :: Float
 cardWidth = 80
 
@@ -67,6 +74,14 @@ cardBorder = 4
 
 cardSpacing :: Float
 cardSpacing = 50
+
+-- Width of the window
+width :: Int
+width = 800
+
+-- Height of the window
+height :: Int
+height = 600
 
 playerCardY :: Float
 playerCardY = fromIntegral height - 50 - cardHeight
@@ -128,13 +143,6 @@ instance Draw Card where
 -- Draws the back of a card
 drawBlankCard :: Float -> Float -> IO ()
 drawBlankCard x y = drawCardBackground x y black
-
-type Deck = [Card]
-
-data Model = Model Card Deck Deck Deck
-
-class Draw a where
-  draw :: (a, Float, Float) -> IO ()
 
 -- Creates all of the preset cards in a deck
 allCards :: Deck
@@ -241,8 +249,10 @@ priorityMove moves = firstJust (colorMove moves)
 -- given a descending list of colors ordered by count
 wildMove :: Deck -> [Color] -> Maybe Card
 wildMove [] _ = Nothing
-wildMove ((Wild _) : _) colors = Just (Wild (Just (head colors)))
-wildMove ((WildDraw _) : _) colors = Just (WildDraw (Just (head colors)))
+wildMove ((Wild _) : _) (color : _) = Just (Wild (Just color))
+wildMove ((Wild _) : _) [] = Just (Wild (Just Red))
+wildMove ((WildDraw _) : _) (color : _) = Just (WildDraw (Just color))
+wildMove ((WildDraw _) : _) [] = Just (WildDraw (Just Red))
 wildMove (_ : xs) colors = wildMove xs colors
 
 {-
@@ -278,11 +288,9 @@ computerPlayCard :: Model -> Card -> Model
 computerPlayCard (Model _ player computer pile) card@(Normal _ _) =
   Model card player (delete card computer) pile
 computerPlayCard (Model _ player computer pile) card@(Skip _) =
-  let state = Model card player (delete card computer) pile
-   in computerPlay state
+  computerPlay (Model card player (delete card computer) pile)
 computerPlayCard (Model _ player computer pile) card@(Reverse _) =
-  let state = Model card player (delete card computer) pile
-   in computerPlay state
+  computerPlay (Model card player (delete card computer) pile)
 computerPlayCard (Model _ player computer pile) card@(Draw _) =
   let (drawn, newPile) = splitAt 2 pile
    in Model card (drawn ++ player) (delete card computer) newPile
@@ -290,8 +298,7 @@ computerPlayCard (Model _ player computer pile) (Wild (Just c)) =
   Model (Wild (Just c)) player (delete (Wild Nothing) computer) pile
 computerPlayCard (Model _ player computer pile) (WildDraw (Just c)) =
   let (drawn, newPile) = splitAt 4 pile
-      state = Model (WildDraw (Just c)) (drawn ++ player) (delete (WildDraw Nothing) computer) newPile
-   in computerPlay state
+   in computerPlay (Model (WildDraw (Just c)) (drawn ++ player) (delete (WildDraw Nothing) computer) newPile)
 computerPlayCard _ (Wild Nothing) =
   error "computer played wild with no color"
 computerPlayCard _ (WildDraw Nothing) =
@@ -301,19 +308,16 @@ computerPlayCard _ (WildDraw Nothing) =
 -- Precondition: Card must be playable
 playCard :: Model -> Card -> Model
 playCard (Model _ player computer pile) card@(Normal _ _) =
-  let state = Model card (delete card player) computer pile
-   in computerPlay state
+  computerPlay (Model card (delete card player) computer pile)
 playCard (Model _ player computer pile) card@(Skip _) =
   Model card (delete card player) computer pile
 playCard (Model _ player computer pile) card@(Reverse _) =
   Model card (delete card player) computer pile
 playCard (Model _ player computer pile) card@(Draw _) =
   let (drawn, newPile) = splitAt 2 pile
-      state = Model card (delete card player) (drawn ++ computer) newPile
-   in computerPlay state
+   in computerPlay (Model card (delete card player) (drawn ++ computer) newPile)
 playCard (Model _ player computer pile) (Wild (Just c)) =
-  let state = Model (Wild (Just c)) (delete (Wild Nothing) player) computer pile
-   in computerPlay state
+  computerPlay (Model (Wild (Just c)) (delete (Wild Nothing) player) computer pile)
 playCard (Model _ player computer pile) (WildDraw (Just c)) =
   let (drawn, newPile) = splitAt 4 pile
    in Model (WildDraw (Just c)) (delete (WildDraw Nothing) player) (drawn ++ computer) newPile
@@ -354,14 +358,6 @@ runUpdates state (x : xs) = case update state x of
   Left failure -> Left failure
   Right next -> runUpdates next xs
 
--- Width of the window
-width :: Int
-width = 800
-
--- Height of the window
-height :: Int
-height = 600
-
 -- Draws all graphics, checks for mouse updates, and updates the state
 mainLoop :: Model -> IO Model
 mainLoop state@(Model _ [] _ _) = do
@@ -369,19 +365,19 @@ mainLoop state@(Model _ [] _ _) = do
   clearBackground rayWhite
   drawText "You Win!" 50 50 24 black
   endDrawing
-  pure state
+  return state
 mainLoop state@(Model _ _ [] _) = do
   beginDrawing
   clearBackground rayWhite
   drawText "You Lose!" 50 50 24 black
   endDrawing
-  pure state
+  return state
 mainLoop state@(Model _ _ _ []) = do
   beginDrawing
   clearBackground rayWhite
   drawText "It's a tie!" 50 50 24 black
   endDrawing
-  pure state
+  return state
 mainLoop state@(Model top player computer _) = do
   let playerCardLocations = (\(card, x) -> (card, x, playerCardY)) <$> zip player [cardSpacing, (cardSpacing * 2) ..]
   beginDrawing
@@ -410,9 +406,7 @@ mainLoop state@(Model top player computer _) = do
 -- Opens the window and runs the main loop
 main :: IO ()
 main = do
-  initWindow width height "Uno"
+  window <- initWindow width height "Uno"
   setTargetFPS 60
-
   genInitialState >>= whileWindowOpen_ mainLoop
-
-  closeWindow
+  closeWindow window
