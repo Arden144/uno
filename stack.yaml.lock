@@ -12,12 +12,12 @@ packages:
   original:
     hackage: random-shuffle-0.0.4
 - completed:
-    hackage: h-raylib-4.5.3.3@sha256:78d1f99bfb08e4bd5e65a41b79ffa73445dc1cec6199f0fc6fdbad9a9959c7aa,5881
+    hackage: h-raylib-4.6.0.5@sha256:94c3a27e0569f9601a428e561b21740530d75edf65ccb0433f796a98e513be7f,6124
     pantry-tree:
-      sha256: 8bba8820cec736747caa76b611966b255c4c9415a45e8cafcbe54b418bf4e873
-      size: 25792
+      sha256: 2b936c8b56732bfba6195b1cca65916cd760b5d83b642829b2dd265dfe5ec87f
+      size: 26162
   original:
-    hackage: h-raylib-4.5.3.3
+    hackage: h-raylib-4.6.0.5
 snapshots:
 - completed:
     sha256: af5d667f6096e535b9c725a72cffe0f6c060e0568d9f9eeda04caee70d0d9d2d
