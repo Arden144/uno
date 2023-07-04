@@ -457,7 +457,7 @@ mainLoop s = do
 
   clearBackground rayWhite
 
-  drawBlankCard (rectangle'x pileCard) (rectangle'y pileCard)
+  drawBlankCard pileCard.rectangle'x pileCard.rectangle'y
   draw (s.top, fromIntegral width / 2 + cardWidth / 2 + 10, fromIntegral height / 2 - cardHeight / 2)
   mapM_ (\(_, offset) -> drawBlankCard (offset + 40) 50) (zip s.cpu [0, cardSpacing ..])
   mapM_ draw playerCardLocations
