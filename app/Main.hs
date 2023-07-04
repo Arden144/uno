@@ -1,4 +1,6 @@
 {-# LANGUAGE ImportQualifiedPost #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 
 module Main (main) where
 
@@ -58,7 +60,12 @@ data Failure
 
 type Deck = [Card]
 
-data Model = Model Card Deck Deck Deck
+data Model = Model
+  { top :: Card,
+    player :: Deck,
+    cpu :: Deck,
+    pile :: Deck
+  }
 
 class Draw a where
   draw :: (a, Float, Float) -> IO ()
@@ -169,9 +176,9 @@ genInitialState =
     let top = fromMaybe (head pile) (find isStarterCard pile)
     let pile2 = delete top pile
     let (player, pile3) = deal pile2
-    let (computer, pile4) = deal pile3
+    let (cpu, pile4) = deal pile3
 
-    return (Model top player computer pile4)
+    return Model {top, player, cpu, pile = pile4}
 
 -- Checks if a card in the player's deck was clicked and issues an update
 deckCardUpdate :: Vector2 -> [(Card, Float, Float)] -> Update
@@ -266,8 +273,12 @@ wildMove (_ : xs) colors = wildMove xs colors
 
 -- Draws a card for the computer and updates the state
 computerDrawCard :: Model -> Model
-computerDrawCard (Model top player computer (pickup : pile)) = Model top player (pickup : computer) pile
-computerDrawCard (Model top player computer []) = Model top player computer []
+computerDrawCard s@Model {pile = (pickup : newPile)} =
+  s
+    { cpu = pickup : s.cpu,
+      pile = newPile
+    }
+computerDrawCard s@Model {pile = []} = s
 
 -- Gets the computer's next move if possible
 computerGetMove :: Card -> Deck -> Maybe Card
@@ -278,27 +289,54 @@ computerGetMove top deck = listToMaybe $ catMaybes [priorityMove moves idealColo
 
 -- Either plays the best move or picks up if no valid move exists
 computerPlay :: Model -> Model
-computerPlay state@(Model top _ computer _) = case computerGetMove top computer of
-  Just card -> computerPlayCard state card
-  Nothing -> computerDrawCard state
+computerPlay s = case computerGetMove s.top s.cpu of
+  Just card -> computerPlayCard s card
+  Nothing -> computerDrawCard s
 
 -- Plays a card and plays another turn if needed
 -- Precondition: Card must be playable
 computerPlayCard :: Model -> Card -> Model
-computerPlayCard (Model _ player computer pile) card@(Normal _ _) =
-  Model card player (delete card computer) pile
-computerPlayCard (Model _ player computer pile) card@(Skip _) =
-  computerPlay (Model card player (delete card computer) pile)
-computerPlayCard (Model _ player computer pile) card@(Reverse _) =
-  computerPlay (Model card player (delete card computer) pile)
-computerPlayCard (Model _ player computer pile) card@(Draw _) =
-  let (drawn, newPile) = splitAt 2 pile
-   in Model card (drawn ++ player) (delete card computer) newPile
-computerPlayCard (Model _ player computer pile) (Wild (Just c)) =
-  Model (Wild (Just c)) player (delete (Wild Nothing) computer) pile
-computerPlayCard (Model _ player computer pile) (WildDraw (Just c)) =
-  let (drawn, newPile) = splitAt 4 pile
-   in computerPlay (Model (WildDraw (Just c)) (drawn ++ player) (delete (WildDraw Nothing) computer) newPile)
+computerPlayCard s card@(Normal _ _) =
+  s
+    { top = card,
+      cpu = delete card s.cpu
+    }
+computerPlayCard s card@(Skip _) =
+  computerPlay
+    s
+      { top = card,
+        cpu = delete card s.cpu
+      }
+computerPlayCard s card@(Reverse _) =
+  computerPlay
+    s
+      { top = card,
+        cpu = delete card s.cpu
+      }
+computerPlayCard s card@(Draw _) =
+  s
+    { top = card,
+      player = drawn ++ s.player,
+      cpu = delete card s.cpu,
+      pile = newPile
+    }
+  where
+    (drawn, newPile) = splitAt 2 s.pile
+computerPlayCard s card@(Wild (Just _)) =
+  s
+    { top = card,
+      cpu = delete (Wild Nothing) s.cpu
+    }
+computerPlayCard s card@(WildDraw (Just _)) =
+  computerPlay
+    s
+      { top = card,
+        player = drawn ++ s.player,
+        cpu = delete (WildDraw Nothing) s.cpu,
+        pile = newPile
+      }
+  where
+    (drawn, newPile) = splitAt 4 s.pile
 computerPlayCard _ (Wild Nothing) =
   error "computer played wild with no color"
 computerPlayCard _ (WildDraw Nothing) =
@@ -307,20 +345,47 @@ computerPlayCard _ (WildDraw Nothing) =
 -- Plays a card and runs the computer's move if needed
 -- Precondition: Card must be playable
 playCard :: Model -> Card -> Model
-playCard (Model _ player computer pile) card@(Normal _ _) =
-  computerPlay (Model card (delete card player) computer pile)
-playCard (Model _ player computer pile) card@(Skip _) =
-  Model card (delete card player) computer pile
-playCard (Model _ player computer pile) card@(Reverse _) =
-  Model card (delete card player) computer pile
-playCard (Model _ player computer pile) card@(Draw _) =
-  let (drawn, newPile) = splitAt 2 pile
-   in computerPlay (Model card (delete card player) (drawn ++ computer) newPile)
-playCard (Model _ player computer pile) (Wild (Just c)) =
-  computerPlay (Model (Wild (Just c)) (delete (Wild Nothing) player) computer pile)
-playCard (Model _ player computer pile) (WildDraw (Just c)) =
-  let (drawn, newPile) = splitAt 4 pile
-   in Model (WildDraw (Just c)) (delete (WildDraw Nothing) player) (drawn ++ computer) newPile
+playCard s card@(Normal _ _) =
+  computerPlay
+    s
+      { top = card,
+        player = delete card s.player
+      }
+playCard s card@(Skip _) =
+  s
+    { top = card,
+      player = delete card s.player
+    }
+playCard s card@(Reverse _) =
+  s
+    { top = card,
+      player = delete card s.player
+    }
+playCard s card@(Draw _) =
+  computerPlay
+    s
+      { top = card,
+        player = delete card s.player,
+        cpu = drawn ++ s.cpu,
+        pile = newPile
+      }
+  where
+    (drawn, newPile) = splitAt 2 s.pile
+playCard s card@(Wild (Just _)) =
+  computerPlay
+    s
+      { top = card,
+        player = delete (Wild Nothing) s.player
+      }
+playCard s card@(WildDraw (Just _)) =
+  s
+    { top = card,
+      player = delete (WildDraw Nothing) s.player,
+      cpu = drawn ++ s.cpu,
+      pile = newPile
+    }
+  where
+    (drawn, newPile) = splitAt 4 s.pile
 playCard _ (Wild Nothing) =
   error "player played wild with no color"
 playCard _ (WildDraw Nothing) =
@@ -328,12 +393,20 @@ playCard _ (WildDraw Nothing) =
 
 -- Runs an update and updates the model
 update :: Model -> Update -> Either Failure Model
-update state None = Right state
-update state@(Model top _ _ _) (Play card)
-  | isValidMove top card = Right (playCard state card)
+update s None = Right s
+update s (Play card)
+  | isValidMove s.top card = Right (playCard s card)
   | otherwise = Left InvalidMove
-update (Model top player computer (pickup : pile)) Pickup = Right (computerPlay (Model top (pickup : player) computer pile))
-update (Model top player computer []) Pickup = Right (Model top player computer [])
+update s@Model {pile = (pickup : newPile)} Pickup =
+  Right
+    ( computerPlay
+        s
+          { player = pickup : s.player,
+            pile = newPile
+          }
+    )
+update s@Model {pile = []} Pickup =
+  Right s
 
 -- Returns true if the second card can be played on the first
 isValidMove :: Card -> Card -> Bool
@@ -353,40 +426,40 @@ isValidMove a b = matchingColor || matchingNumber
 
 -- Run every update until a failure is encountered or all finish
 runUpdates :: Model -> [Update] -> Either Failure Model
-runUpdates state [] = Right state
-runUpdates state (x : xs) = case update state x of
+runUpdates s [] = Right s
+runUpdates s (x : xs) = case update s x of
   Left failure -> Left failure
   Right next -> runUpdates next xs
 
 -- Draws all graphics, checks for mouse updates, and updates the state
 mainLoop :: Model -> IO Model
-mainLoop state@(Model _ [] _ _) = do
+mainLoop s@Model {player = []} = do
   beginDrawing
   clearBackground rayWhite
   drawText "You Win!" 50 50 24 black
   endDrawing
-  return state
-mainLoop state@(Model _ _ [] _) = do
+  return s
+mainLoop s@Model {cpu = []} = do
   beginDrawing
   clearBackground rayWhite
   drawText "You Lose!" 50 50 24 black
   endDrawing
-  return state
-mainLoop state@(Model _ _ _ []) = do
+  return s
+mainLoop s@Model {pile = []} = do
   beginDrawing
   clearBackground rayWhite
   drawText "It's a tie!" 50 50 24 black
   endDrawing
-  return state
-mainLoop state@(Model top player computer _) = do
-  let playerCardLocations = (\(card, x) -> (card, x, playerCardY)) <$> zip player [cardSpacing, (cardSpacing * 2) ..]
+  return s
+mainLoop s = do
+  let playerCardLocations = (\(card, x) -> (card, x, playerCardY)) <$> zip s.player [cardSpacing, (cardSpacing * 2) ..]
   beginDrawing
 
   clearBackground rayWhite
 
   drawBlankCard (rectangle'x pileCard) (rectangle'y pileCard)
-  draw (top, fromIntegral width / 2 + cardWidth / 2 + 10, fromIntegral height / 2 - cardHeight / 2)
-  mapM_ (\(_, offset) -> drawBlankCard (offset + 40) 50) (zip computer [0, cardSpacing ..])
+  draw (s.top, fromIntegral width / 2 + cardWidth / 2 + 10, fromIntegral height / 2 - cardHeight / 2)
+  mapM_ (\(_, offset) -> drawBlankCard (offset + 40) 50) (zip s.cpu [0, cardSpacing ..])
   mapM_ draw playerCardLocations
 
   endDrawing
@@ -399,8 +472,8 @@ mainLoop state@(Model top player computer _) = do
           toMaybe click (pileCardUpdate mousePosition)
         ]
 
-  case runUpdates state (catMaybes updates) of
-    Left _ -> return state
+  case runUpdates s (catMaybes updates) of
+    Left _ -> return s
     Right newState -> return newState
 
 -- Opens the window and runs the main loop
