@@ -12,16 +12,12 @@ packages:
   original:
     hackage: random-shuffle-0.0.4
 - completed:
-    commit: 7921b8427c66cc153618c0e2e69cb8fd4fe3f1dd
-    git: https://github.com/Arden144/h-raylib.git
-    name: h-raylib
+    hackage: h-raylib-4.5.3.3@sha256:78d1f99bfb08e4bd5e65a41b79ffa73445dc1cec6199f0fc6fdbad9a9959c7aa,5881
     pantry-tree:
-      sha256: f67f943cd9ad08f4b8941abe3705396fbd0ddcabc177713e80bc442ade85cf28
-      size: 170904
-    version: 4.5.3.0
+      sha256: 8bba8820cec736747caa76b611966b255c4c9415a45e8cafcbe54b418bf4e873
+      size: 25792
   original:
-    commit: 7921b8427c66cc153618c0e2e69cb8fd4fe3f1dd
-    git: https://github.com/Arden144/h-raylib.git
+    hackage: h-raylib-4.5.3.3
 snapshots:
 - completed:
     sha256: af5d667f6096e535b9c725a72cffe0f6c060e0568d9f9eeda04caee70d0d9d2d

@@ -42,7 +42,7 @@ packages:
 #
 extra-deps:
   - random-shuffle-0.0.4
-  - h-raylib-4.5.3.1
+  - h-raylib-4.5.3.3
 # Override default flag values for local packages and extra-deps
 # flags: {}
 
